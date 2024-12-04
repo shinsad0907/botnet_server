@@ -37,6 +37,7 @@ def get_token():
         return []
 
 # Hàm cập nhật bots định kỳ
+
 def update_bots():
     global bots
     try:
@@ -46,10 +47,22 @@ def update_bots():
     except Exception as e:
         print(f"Error updating bots: {str(e)}")
 
+update_bots()
+@app.route('/api/update_bots', methods=['GET'])
+def update_bots_api():
+    global bots
+    try:
+        update_bots()
+        # bots = {bot['token']: {"name": bot['name']} for bot in bot_list}
+        # print(f"Bots updated: {bots}")  # Log để kiểm tra cập nhật
+        return jsonify({"message": "Bots updated successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to update bots: {str(e)}"}), 500
+
 # Tích hợp APScheduler
-scheduler = BackgroundScheduler()
-scheduler.add_job(update_bots, 'interval', seconds=60)  # Cập nhật mỗi 60 giây
-scheduler.start()
+# scheduler = BackgroundScheduler()
+# scheduler.add_job(update_bots, 'interval', seconds=60)  # Cập nhật mỗi 60 giây
+# scheduler.start()
 # Tạo biến data_store là một dictionary trống để lưu trữ dữ liệu
 data_store = {}
 
@@ -78,6 +91,7 @@ def bot_api(token):
     }
 
     return jsonify(response), 200
+
 @app.route('/api/tokens', methods=['GET'])
 def get_tokens():
     # Trả về danh sách các token hiện có
