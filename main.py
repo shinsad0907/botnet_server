@@ -71,6 +71,10 @@ def bot_api(token):
     }
 
     return jsonify(response), 200
+@app.route('/api/tokens', methods=['GET'])
+def get_tokens():
+    # Trả về danh sách các token hiện có
+    return jsonify({"tokens": list(bots.keys())}), 200
 
 # Endpoint để xem dữ liệu đã gửi theo token
 @app.route('/api/<token>/data', methods=['GET'])
