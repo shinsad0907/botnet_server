@@ -4,6 +4,7 @@ import io
 import base64
 import requests
 import threading
+from apscheduler.schedulers.background import BackgroundScheduler
 import time
 
 app = Flask(__name__)
@@ -13,6 +14,7 @@ def generate_token(length=20):
     return ''.join(secrets.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for _ in range(length))
 
 # Danh sách bot lưu trữ tạm thời
+# Danh sách bots
 bots = {}
 
 # Hàm lấy danh sách bots từ API
@@ -37,12 +39,17 @@ def get_token():
 # Hàm cập nhật bots định kỳ
 def update_bots():
     global bots
-    while True:
+    try:
         bot_list = get_token()
         bots = {bot['token']: {"name": bot['name']} for bot in bot_list}
         print(f"Bots updated: {bots}")  # Log để kiểm tra cập nhật
-        time.sleep(60)  # Cập nhật mỗi 60 giây
+    except Exception as e:
+        print(f"Error updating bots: {str(e)}")
 
+# Tích hợp APScheduler
+scheduler = BackgroundScheduler()
+scheduler.add_job(update_bots, 'interval', seconds=60)  # Cập nhật mỗi 60 giây
+scheduler.start()
 # Tạo biến data_store là một dictionary trống để lưu trữ dữ liệu
 data_store = {}
 
@@ -234,8 +241,6 @@ def get_uploaded_files(token):
 
 if __name__ == '__main__':
     # Khởi động thread cập nhật bots
-    updater_thread = threading.Thread(target=update_bots, daemon=True)
-    updater_thread.start()
 
     # Chạy ứng dụng Flask
     app.run(debug=True)
