@@ -37,6 +37,7 @@ def get_token():
         return []
 
 # Hàm cập nhật bots định kỳ
+
 def update_bots():
     global bots
     try:
@@ -46,10 +47,22 @@ def update_bots():
     except Exception as e:
         print(f"Error updating bots: {str(e)}")
 
+update_bots()
+@app.route('/api/update_bots', methods=['GET'])
+def update_bots_api():
+    global bots
+    try:
+        update_bots()
+        # bots = {bot['token']: {"name": bot['name']} for bot in bot_list}
+        # print(f"Bots updated: {bots}")  # Log để kiểm tra cập nhật
+        return jsonify({"message": "Bots updated successfully"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to update bots: {str(e)}"}), 500
+
 # Tích hợp APScheduler
-scheduler = BackgroundScheduler()
-scheduler.add_job(update_bots, 'interval', seconds=60)  # Cập nhật mỗi 60 giây
-scheduler.start()
+# scheduler = BackgroundScheduler()
+# scheduler.add_job(update_bots, 'interval', seconds=60)  # Cập nhật mỗi 60 giây
+# scheduler.start()
 # Tạo biến data_store là một dictionary trống để lưu trữ dữ liệu
 data_store = {}
 
@@ -79,6 +92,11 @@ def bot_api(token):
 
     return jsonify(response), 200
 
+@app.route('/api/tokens', methods=['GET'])
+def get_tokens():
+    # Trả về danh sách các token hiện có
+    return jsonify({"tokens": list(bots.keys())}), 200
+
 # Endpoint để xem dữ liệu đã gửi theo token
 @app.route('/api/<token>/data', methods=['GET'])
 def get_token_data(token):
@@ -91,7 +109,10 @@ def get_token_data(token):
     return jsonify({"token": token, "data": token_data}), 200
 
 # Dictionary lưu file tạm (bộ nhớ)
+
+# Lưu trữ token (có thể là database hoặc trong bộ nhớ tạm thời)
 file_store = {}
+
 
 @app.route('/api/<token>/upload', methods=['POST'])
 def upload_file(token):
@@ -100,46 +121,51 @@ def upload_file(token):
     if not bot:
         return jsonify({"error": "Unauthorized: Invalid token"}), 401
 
+    # Kiểm tra xem file có tồn tại không
     if 'file' not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
 
     file = request.files['file']
+
     if file.filename == '':
         return jsonify({"error": "No file selected for uploading"}), 400
 
-    # Đọc file vào bộ nhớ tạm
-    file_bytes = io.BytesIO(file.read())
-    filename = file.filename
-    unique_token = generate_token()  # Sinh token duy nhất cho mỗi file
+    # Lấy thông tin token từ form data
+    token_data = request.form.get('token')
+    # print("Received token data:", token_data)  # Debugging: Xem dữ liệu gửi từ client
 
-    # Nếu token đã tồn tại, thay thế file cũ
-    file_store[unique_token] = {
+    # Sinh token duy nhất và lưu thông tin
+    unique_token = generate_token()
+    filename = file.filename
+    file_store[token_data] = {
         "filename": filename,
-        "content": file_bytes.getvalue()
+        "content": file.read()
     }
+
+    # print("File uploaded:", unique_token, file_store[unique_token])
 
     return jsonify({
         "message": f"File uploaded successfully by {bot['name']}",
         "download_token": unique_token
     }), 200
 
-@app.route('/download/<token>', methods=['GET'])
-def download_file(token):
-    # Kiểm tra token tồn tại
-    file_data = file_store.get(token)
-    if not file_data:
-        return jsonify({"error": "Invalid or expired token"}), 404
+# @app.route('/download/<token>', methods=['GET'])
+# def download_file(token):
+#     # Kiểm tra token tồn tại
+#     file_data = file_store.get(token)
+#     if not file_data:
+#         return jsonify({"error": "Invalid or expired token"}), 404
 
-    # Trả file về client
-    file_bytes = io.BytesIO(file_data['content'])
-    file_bytes.seek(0)
-    # file_store.clear()
-    return send_file(
-        file_bytes,
-        mimetype='application/octet-stream',
-        as_attachment=True,
-        download_name=file_data['filename']
-    )
+#     # Trả file về client
+#     file_bytes = io.BytesIO(file_data['content'])
+#     file_bytes.seek(0)
+#     # file_store.clear()
+#     return send_file(
+#         file_bytes,
+#         mimetype='application/octet-stream',
+#         as_attachment=True,
+#         download_name=file_data['filename']
+#     )
 @app.route('/api/newdevice', methods=['POST'])
 def add_new_devices():
     # Lấy dữ liệu từ yêu cầu
@@ -185,7 +211,6 @@ def check_device_info():
         return jsonify({"error": "Invalid request. Expected a list of tokens."}), 400
 
     results = []
-
     for token in data:
         if token in bots:
             # Token tồn tại
