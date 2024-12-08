@@ -1,4 +1,10 @@
+<<<<<<< HEAD
 Flask==3.0.3
 Flask-Login==0.6.3
 requests == 2.32.3
 apscheduler==3.11.0
+=======
+Flask-Login==0.6.3
+Flask==3.0.3
+requests == 2.32.3
+>>>>>>> df96d5aac5635eb6fb8625238d3363e796ecc82e
