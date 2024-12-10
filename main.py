@@ -9,7 +9,6 @@ def generate_token(length=20):
     return ''.join(secrets.choice('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789') for _ in range(length))
 
 # Danh sách bot lưu trữ tạm thời
-# Danh sách bots
 bots = {}
 
 # Hàm lấy danh sách bots từ API
@@ -108,7 +107,6 @@ def get_token_data(token):
 # Lưu trữ token (có thể là database hoặc trong bộ nhớ tạm thời)
 file_store = {}
 
-
 @app.route('/api/<token>/upload', methods=['POST'])
 def upload_file(token):
     # Kiểm tra token
@@ -125,24 +123,24 @@ def upload_file(token):
     if file.filename == '':
         return jsonify({"error": "No file selected for uploading"}), 400
 
-    # Lấy thông tin token từ form data
+    # Lấy token từ form data
     token_data = request.form.get('token')
-    # print("Received token data:", token_data)  # Debugging: Xem dữ liệu gửi từ client
 
-    # Sinh token duy nhất và lưu thông tin
-    unique_token = generate_token()
-    filename = file.filename
-    file_store[token_data] = {
-        "filename": filename,
+    # Lưu dữ liệu file vào `file_store`, phân loại theo token
+    if token not in file_store:
+        file_store[token] = []
+
+    file_store[token].append({
+        "file_token": token_data,
+        "filename": file.filename,
         "content": file.read()
-    }
-
-    # print("File uploaded:", unique_token, file_store[unique_token])
+    })
 
     return jsonify({
         "message": f"File uploaded successfully by {bot['name']}",
-        "download_token": unique_token
+        "download_token": token_data
     }), 200
+
 @app.route('/api/<token>/files', methods=['GET'])
 def get_uploaded_files(token):
     # Kiểm tra token có hợp lệ không
@@ -150,22 +148,22 @@ def get_uploaded_files(token):
     if not bot:
         return jsonify({"error": "Unauthorized: Invalid token"}), 401
 
-    # Lọc các file được lưu bởi token cụ thể
-    uploaded_files = [
-        {
-            "file_token": file_token,  # Token của file
-            "filename": file_data['filename'],  # Tên file
-        }
-        for file_token, file_data in file_store.items()
-        if file_token == token  # Chỉ lấy các file liên quan đến token này
-    ]
+    # Lấy danh sách file được lưu bởi token
+    uploaded_files = file_store.get(token, [])
 
     if not uploaded_files:
         return jsonify({"message": "No files uploaded yet."}), 200
 
+    # Trả về danh sách file
     return jsonify({
         "device_token": token,
-        "uploaded_files": uploaded_files
+        "uploaded_files": [
+            {
+                "file_token": file["file_token"],
+                "filename": file["filename"]
+            }
+            for file in uploaded_files
+        ]
     }), 200
 
 # @app.route('/download/<token>', methods=['GET'])
